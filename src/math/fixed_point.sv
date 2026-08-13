@@ -8,4 +8,13 @@ package fixed_point;
     localparam fixed_t FIXED_MAX = 17'sd65535;
     localparam fixed_t FIXED_MIN = -17'sd65536;
 
+    //entry reg + 18 cycle core + 2 result regs for each math engine and alignment pipe
+    localparam int PIPE_LATENCY = 21;
+
+    //shared so shadow and diffuse agree
+    localparam fixed_t LIGHT_DIR_X = 17'sd200;
+    localparam fixed_t LIGHT_DIR_Y = 17'sd325;
+    localparam fixed_t LIGHT_DIR_Z = 17'sd200;
+    localparam fixed_t FIXED_AMBIENT = 17'sd50;
+
 endpackage

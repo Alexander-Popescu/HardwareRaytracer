@@ -14,30 +14,24 @@ module ray_generator #(
     output fixed_t   dir_z
 );
 
-    //offset from center to move coordinate system to something nicer, (0,0) at center
+    //shift so (0,0) is at screen center
     logic signed [16:0] h_offset;
     logic signed [16:0] v_offset;
-
 
     assign h_offset = h_count - (H_RES / 2);
     assign v_offset = (V_RES / 2) - v_count;
 
-    //normalized device coordinates
-    fixed_t u;
-    fixed_t v;
+    //scale to normalized device coords with a multiply instead of a divide
+    //512*512/320 = 819 and y matches because the 0.75 aspect fix cancels
+    localparam fixed_t NDC_SCALE = 17'sd819;
 
-    logic signed [33:0] h_scaled;
-    logic signed [33:0] v_scaled;
+    //34 bit so the products dont wrap before the shift
+    logic signed [33:0] u_full, v_full;
+    assign u_full = h_offset * NDC_SCALE;
+    assign v_full = v_offset * NDC_SCALE;
 
-    assign u = (h_offset * FIXED_ONE) / (H_RES / 2);
-    assign v = (v_offset * FIXED_ONE) / (V_RES / 2);
-
-    //correct for the aspect ratio so the sphere actually looks round
-    logic signed [33:0] v_fov_scaled;
-    assign v_fov_scaled = (v * 17'sd384) >>> 9; //v * 0.75
-
-    assign dir_x = u;
-    assign dir_y = v_fov_scaled[16:0];
-    assign dir_z = -FIXED_ONE; //cam direction
+    assign dir_x = u_full >>> 9;
+    assign dir_y = v_full >>> 9;
+    assign dir_z = -FIXED_ONE;
 
 endmodule

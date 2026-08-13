@@ -1,6 +1,6 @@
 import fixed_point::*;
 
-// tells you which object was hit this pixel
+//tells you which object was hit this pixel
 module hit_selector (
     input  fixed_t sphere_t,
     input  fixed_t plane_t,

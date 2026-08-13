@@ -19,38 +19,25 @@ module vga_controller #(
 
     //VGA spec
     localparam H_VISIBLE = 640;
-    localparam H_FRONT = 16;  //front porch
-    localparam H_SYNC = 96; //sync pulse width
-    localparam H_BACK = 48; //back porch
-    localparam H_TOTAL = 800;//cycles per line
+    localparam H_FRONT = 16;
+    localparam H_SYNC = 96;
+    localparam H_BACK = 48;
+    localparam H_TOTAL = 800;
 
     localparam V_VISIBLE = 480;
     localparam V_FRONT = 10;
     localparam V_SYNC = 2;
     localparam V_BACK = 33;
-    localparam V_TOTAL = 525; //lines per frame
+    localparam V_TOTAL = 525;
 
     logic [9:0] h_count;
     logic [9:0] v_count;
-    logic active_display;
-
-    //pixel buffer signals
-    logic queue_push_en;
-    assign queue_push_en = 1'b1;
-    logic [31:0] renderer_pixel_data;
-    logic [31:0] queue_pop_data;
-
-    localparam PIPELINE_OFFSET = 3;
-    logic [9:0] ray_x;
-    logic [9:0] ray_y;
-
-    //effective coordinates for rays, with pipeline offset
-    assign ray_x = (h_count + PIPELINE_OFFSET) % H_VISIBLE;
-    assign ray_y = ((v_count + ((h_count + PIPELINE_OFFSET) / H_VISIBLE)) > (V_VISIBLE - 1)) ? 
-                    0 : (v_count + ((h_count + PIPELINE_OFFSET) / H_VISIBLE));
+    logic raw_active_display;
+    logic raw_hsync;
+    logic raw_vsync;
 
     //vga timing
-    always_ff @(posedge clk or posedge rst) begin
+    always_ff @(posedge clk) begin
         if (rst) begin
             h_count <= 10'd0;
             v_count <= 10'd0;
@@ -72,30 +59,54 @@ module vga_controller #(
     end
 
     //sync pulses
-
     always_comb begin
         if ((h_count >= H_VISIBLE + H_FRONT) && (h_count < H_VISIBLE + H_FRONT + H_SYNC)) begin
-            hsync = 1'b0;
+            raw_hsync = 1'b0;
         end else begin
-            hsync = 1'b1;
+            raw_hsync = 1'b1;
         end
     end
 
     always_comb begin
         if ((v_count >= V_VISIBLE + V_FRONT) && (v_count < V_VISIBLE + V_FRONT + V_SYNC)) begin
-            vsync = 1'b0;
+            raw_vsync = 1'b0;
         end else begin
-            vsync = 1'b1;
+            raw_vsync = 1'b1;
         end
     end
 
     always_comb begin
         if (h_count < H_VISIBLE && v_count < V_VISIBLE) begin
-            active_display = 1'b1;
+            raw_active_display = 1'b1;
         end else begin
-            active_display = 1'b0;
+            raw_active_display = 1'b0;
         end
     end
+
+    //delay syncs to match the renderer latency
+    localparam RENDER_LATENCY = 2 * (PIPE_LATENCY + 3);
+    logic [RENDER_LATENCY-1:0] hsync_pipe;
+    logic [RENDER_LATENCY-1:0] vsync_pipe;
+    logic [RENDER_LATENCY-1:0] active_disp_pipe;
+
+    always_ff @(posedge clk) begin
+        if (rst) begin
+            hsync_pipe <= {RENDER_LATENCY{1'b1}};
+            vsync_pipe <= {RENDER_LATENCY{1'b1}};
+            active_disp_pipe <= '0;
+        end else begin
+            hsync_pipe <= {hsync_pipe[RENDER_LATENCY-2:0], raw_hsync};
+            vsync_pipe <= {vsync_pipe[RENDER_LATENCY-2:0], raw_vsync};
+            active_disp_pipe <= {active_disp_pipe[RENDER_LATENCY-2:0], raw_active_display};
+        end
+    end
+
+    assign hsync = hsync_pipe[RENDER_LATENCY-1];
+    assign vsync = vsync_pipe[RENDER_LATENCY-1];
+    logic active_display;
+    assign active_display = active_disp_pipe[RENDER_LATENCY-1];
+
+    logic [31:0] renderer_pixel_data;
 
     graphics_renderer #(
         .SPHERE_CENTER_X(SPHERE_CENTER_X),
@@ -106,27 +117,24 @@ module vga_controller #(
     ) renderer_inst (
         .clk(clk),
         .rst(rst),
-        .rt_h_count(ray_x),
-        .rt_v_count(ray_y),
+        .rt_h_count(h_count),
+        .rt_v_count(v_count),
         .rt_enable(1'b1),
         .pixel_data(renderer_pixel_data)
     );
 
-    //sync pixels to when they should be displayed
-    pixel_queue #(.N_STAGES(3)) pixel_queue_inst (
-        .clk(clk),
-        .rst(rst),
-        .push_en(queue_push_en),
-        .push_data(renderer_pixel_data),
-        .pop_data(queue_pop_data)
+    //decode rgb vals
+    logic [7:0] raw_red, raw_green, raw_blue;
+    color_extractor color_extractor_inst (
+        .pixel_data(renderer_pixel_data),
+        .red(raw_red),
+        .green(raw_green),
+        .blue(raw_blue)
     );
 
-    //decode rgb vals
-    color_extractor color_extractor_inst (
-        .pixel_data(queue_pop_data),
-        .red(red),
-        .green(green),
-        .blue(blue)
-    );
+    //mask colors outside the active area
+    assign red   = active_display ? raw_red   : 8'd0;
+    assign green = active_display ? raw_green : 8'd0;
+    assign blue  = active_display ? raw_blue  : 8'd0;
 
 endmodule

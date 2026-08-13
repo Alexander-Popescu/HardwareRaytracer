@@ -1,4 +1,4 @@
-//just decodes pixel data, RGBA but I didnt do the A
+//decodes RGBA pixel data but I didnt do the A
 module color_extractor (
     input  logic [31:0] pixel_data,
     output logic [7:0]  red,

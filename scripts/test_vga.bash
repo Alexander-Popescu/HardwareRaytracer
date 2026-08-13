@@ -7,6 +7,7 @@ echo "Compiling simulation: "
 iverilog -g2012 -o build/vga_sim \
     src/math/fixed_point.sv \
     src/math/int_sqrt.sv \
+    src/math/div_pipe.sv \
     src/math/ray_generator.sv \
     src/intersection/sphere_intersect.sv \
     src/intersection/plane_intersect.sv \
@@ -17,9 +18,9 @@ iverilog -g2012 -o build/vga_sim \
     src/shading/color_output.sv \
     src/shading/color_extractor.sv \
     src/shading/shadow_test.sv \
-    src/reflection/reflect_calc.sv \
     src/reflection/reflection_shading.sv \
-    src/display/pixel_queue.sv \
+    src/display/intersection_stage.sv \
+    src/display/shading_stage.sv \
     src/display/graphics_renderer.sv \
     src/display/vga_controller.sv \
     scripts/vga_tb.sv
